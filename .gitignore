@@ -3,6 +3,7 @@ src_temp/
 
 # webpack produced assets
 dist/
+public/
 
 # Logs
 logs
