@@ -1,5 +1,10 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase, ref, push } from "firebase/database";
+import {
+  getDatabase,
+  ref,
+  push,
+  connectDatabaseEmulator,
+} from "firebase/database";
 
 const firebase = initializeApp({
   apiKey: "AIzaSyAC-MrvYQrVekLmIypYa1z4rjYq0aQe-HA",
@@ -13,5 +18,8 @@ const firebase = initializeApp({
 });
 
 const db = getDatabase(firebase);
+if (location.hostname === "localhost") {
+  connectDatabaseEmulator(db, "127.0.0.1", 9000);
+}
 const users = ref(db, "users");
 push(users, "Jeff");
