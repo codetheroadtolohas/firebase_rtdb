@@ -3,11 +3,8 @@ import {
   getDatabase,
   ref,
   push,
-  set,
   connectDatabaseEmulator,
 } from "firebase/database";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
-import { Particle } from "./particle.js";
 
 const firebase = initializeApp({
   apiKey: "AIzaSyAC-MrvYQrVekLmIypYa1z4rjYq0aQe-HA",
