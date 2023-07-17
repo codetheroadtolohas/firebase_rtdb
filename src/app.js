@@ -3,8 +3,12 @@ import {
   getDatabase,
   ref,
   push,
+  set,
+  onValue,
   connectDatabaseEmulator,
 } from "firebase/database";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { Particle } from "./particle";
 
 const firebase = initializeApp({
   apiKey: "AIzaSyAC-MrvYQrVekLmIypYa1z4rjYq0aQe-HA",
@@ -18,29 +22,17 @@ const firebase = initializeApp({
 });
 
 const auth = getAuth(firebase);
-const db = getDatabase();
+const db = getDatabase(firebase);
 
+const colors = ["grey", "lightyellow", "lightgreen", "maroon"];
 const canvas = document.querySelector("canvas");
 const ctx = canvas.getContext("2d");
 
-const color = ["blue", "yellow", "red"];
+let playerId;
+let playerRef;
+let playersRef;
 
-onAuthStateChanged(auth, (user) => {
-  // const users = ref(db, "users");
-  // push(users, "Jeff");
-  console.log("user's Id is " + user.uid);
-
-  let init = {
-    x: Math.random() * 100 + 1,
-    y: Math.random() * 100 + 1,
-    color: color[Math.floor(Math.random() * 2 + 1)],
-  };
-  let p = new Particle(init.x, init.y);
-  p.draw(ctx, init.color);
-
-  set(ref(db, "players/" + user.uid), init);
-});
-
+// sign-in anonymously
 signInAnonymously(auth)
   .then(() => {})
   .catch((error) => {
@@ -48,7 +40,33 @@ signInAnonymously(auth)
     console.log(error.message);
   });
 
-// const db = getDatabase(firebase);
+// update database
+onAuthStateChanged(auth, (player) => {
+  playerId = player.uid;
+  console.log("playerId: " + playerId);
+  playerRef = ref(db, "players/" + playerId);
+  set(playerRef, {
+    id: playerId,
+    name: player.displayName,
+    color: colors[Math.floor(Math.random() * colors.length + 1)],
+    x: Math.floor(Math.random() * 100 + 1),
+    y: Math.floor(Math.random() * 100 + 1),
+  });
+});
+
+// init game and draw all particles
+playersRef = ref(db, "players/");
+onValue(playersRef, (snapshot) => {
+  const data = Object.entries(snapshot.val());
+  for (let i = 0; i < data.length; i++) {
+    let particle = new Particle(data[i][1].x, data[i][1].y);
+    ctx.fillStyle = data[i][1].color;
+    particle.draw(ctx);
+  }
+});
+
 // if (location.hostname === "localhost") {
 //   connectDatabaseEmulator(db, "127.0.0.1", 9000);
 // }
+// const users = ref(db, "users");
+// push(users, "Jeff");
