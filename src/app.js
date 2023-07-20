@@ -12,7 +12,12 @@ import {
   update,
   get,
 } from "firebase/database";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import {
+  getAuth,
+  signInAnonymously,
+  onAuthStateChanged,
+  connectAuthEmulator,
+} from "firebase/auth";
 import { mouse, Particle } from "./particle";
 
 const config = {
@@ -27,13 +32,17 @@ const config = {
 };
 
 const firebase = initializeApp(config);
+const db = getDatabase();
+const auth = getAuth();
+
+if (location.hostname === "localhost") {
+  connectDatabaseEmulator(db, "127.0.0.1", 9000);
+  connectAuthEmulator(auth, "http://127.0.0.1:9099");
+}
 
 const colors = ["grey", "lightblue", "lightgreen", "maroon"];
 const canvas = document.querySelector("canvas");
 const ctx = canvas.getContext("2d");
-
-const auth = getAuth(firebase);
-const db = getDatabase(firebase);
 
 let playerId;
 let playerRef;
@@ -85,6 +94,7 @@ function initGame() {
 onAuthStateChanged(auth, (player) => {
   let currentColor;
   playerId = player.uid;
+  console.log(playerId);
   playerRef = ref(db, "players/" + playerId);
   currentColor = colors[Math.floor(Math.random() * colors.length + 1)];
   set(playerRef, {
