@@ -8,7 +8,7 @@ module.exports = {
     path: path.resolve(__dirname, "public"),
     filename: "bundle.js",
   },
-  devtool: "eval-source-map",
+  devtool: "source-map",
   module: {
     rules: [
       {

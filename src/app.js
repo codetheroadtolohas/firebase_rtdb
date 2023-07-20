@@ -4,13 +4,18 @@ import {
   ref,
   push,
   set,
+  child,
   onValue,
   connectDatabaseEmulator,
+  onChildAdded,
+  onDisconnect,
+  update,
+  get,
 } from "firebase/database";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
-import { Particle } from "./particle";
+import { mouse, Particle } from "./particle";
 
-const firebase = initializeApp({
+const config = {
   apiKey: "AIzaSyAC-MrvYQrVekLmIypYa1z4rjYq0aQe-HA",
   authDomain: "realtime-db-4615e.firebaseapp.com",
   databaseURL:
@@ -19,54 +24,83 @@ const firebase = initializeApp({
   storageBucket: "realtime-db-4615e.appspot.com",
   messagingSenderId: "242795240849",
   appId: "1:242795240849:web:076dd4c6986ceb9dd5ce30",
-});
+};
+
+const firebase = initializeApp(config);
+
+const colors = ["grey", "lightblue", "lightgreen", "maroon"];
+const canvas = document.querySelector("canvas");
+const ctx = canvas.getContext("2d");
 
 const auth = getAuth(firebase);
 const db = getDatabase(firebase);
 
-const colors = ["grey", "lightyellow", "lightgreen", "maroon"];
-const canvas = document.querySelector("canvas");
-const ctx = canvas.getContext("2d");
-
 let playerId;
 let playerRef;
-let playersRef;
+let particles = {};
 
-// sign-in anonymously
-signInAnonymously(auth)
-  .then(() => {})
-  .catch((error) => {
-    console.log(error.code);
-    console.log(error.message);
+function initGame() {
+  let playersRef = ref(db, "players/");
+
+  document.addEventListener("keyup", function (e) {
+    let updates = {};
+
+    if (e.key === "ArrowRight") {
+      updates["/" + playerId + "/x"] = particles[playerId].x + 5;
+      get(child(playerRef, "/x")).then((snapshot) => {
+        console.log(snapshot.val());
+      });
+      update(playersRef, updates);
+    }
   });
 
-// update database
+  onValue(playersRef, (snapshot) => {
+    let data = Object.entries(snapshot.val());
+    data.forEach(function (datum) {
+      if (particles[datum[0]]) {
+        particles[datum[0]].x = datum[1].x;
+        particles[datum[0]].y = datum[1].y;
+      } else {
+        delete particles[datum[0]];
+      }
+    });
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    data.forEach(function (datum) {
+      particles[datum[0]].draw(ctx);
+    });
+  });
+
+  onChildAdded(playersRef, (snapshot) => {
+    let player = snapshot.val();
+    if (player.id === playerId) {
+      player.color = "black";
+    }
+    let particle = new Particle(player.id, player.x, player.y, player.color);
+    particles[player.id] = particle;
+    particle.draw(ctx);
+  });
+}
+
+// add current player to database
 onAuthStateChanged(auth, (player) => {
+  let currentColor;
   playerId = player.uid;
-  console.log("playerId: " + playerId);
   playerRef = ref(db, "players/" + playerId);
+  currentColor = colors[Math.floor(Math.random() * colors.length + 1)];
   set(playerRef, {
     id: playerId,
-    name: player.displayName,
-    color: colors[Math.floor(Math.random() * colors.length + 1)],
+    color: currentColor,
     x: Math.floor(Math.random() * 100 + 1),
     y: Math.floor(Math.random() * 100 + 1),
   });
+
+  onDisconnect(playerRef).remove();
+
+  initGame();
 });
 
-// init game and draw all particles
-playersRef = ref(db, "players/");
-onValue(playersRef, (snapshot) => {
-  const data = Object.entries(snapshot.val());
-  for (let i = 0; i < data.length; i++) {
-    let particle = new Particle(data[i][1].x, data[i][1].y);
-    ctx.fillStyle = data[i][1].color;
-    particle.draw(ctx);
-  }
+// sign-in anonymously
+signInAnonymously(auth).catch((error) => {
+  console.log(error.code);
+  console.log(error.message);
 });
-
-// if (location.hostname === "localhost") {
-//   connectDatabaseEmulator(db, "127.0.0.1", 9000);
-// }
-// const users = ref(db, "users");
-// push(users, "Jeff");
