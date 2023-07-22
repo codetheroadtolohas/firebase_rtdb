@@ -1,4 +1,7 @@
+// Import firebase/app
 import { initializeApp } from "firebase/app";
+
+// Import db functionalities
 import {
   getDatabase,
   ref,
@@ -12,14 +15,21 @@ import {
   update,
   get,
 } from "firebase/database";
+
+// Import auth functionalities
 import {
   getAuth,
   signInAnonymously,
   onAuthStateChanged,
   connectAuthEmulator,
+  EmailAuthProvider,
+  linkWithCredential,
 } from "firebase/auth";
+
+// Import in-house ultility functionalities
 import { mouse, Particle } from "./particle";
 
+// Set this firebase app config
 const config = {
   apiKey: "AIzaSyAC-MrvYQrVekLmIypYa1z4rjYq0aQe-HA",
   authDomain: "realtime-db-4615e.firebaseapp.com",
@@ -40,6 +50,11 @@ if (location.hostname === "localhost") {
   connectAuthEmulator(auth, "http://127.0.0.1:9099");
 }
 
+const inputEmail = document.querySelector("#email");
+const inputPassword = document.querySelector("#password");
+const btnSignUp = document.querySelector("#sign-up");
+const btnSignIn = document.querySelector("#sign-in");
+const btnSignOut = document.querySelector("#sign-out");
 const colors = ["grey", "lightblue", "lightgreen", "maroon"];
 const canvas = document.querySelector("canvas");
 const ctx = canvas.getContext("2d");
@@ -48,6 +63,7 @@ let playerId;
 let playerRef;
 let particles = {};
 
+// Init game
 function initGame() {
   let playersRef = ref(db, "players/");
 
@@ -90,13 +106,12 @@ function initGame() {
   });
 }
 
-// add current player to database
+// Add current player (anonymous or signed-in) to db
 onAuthStateChanged(auth, (player) => {
-  let currentColor;
+  console.log(auth.currentUser.uid);
+  let currentColor = colors[Math.floor(Math.random() * colors.length + 1)];
   playerId = player.uid;
-  console.log(playerId);
   playerRef = ref(db, "players/" + playerId);
-  currentColor = colors[Math.floor(Math.random() * colors.length + 1)];
   set(playerRef, {
     id: playerId,
     color: currentColor,
@@ -109,8 +124,23 @@ onAuthStateChanged(auth, (player) => {
   initGame();
 });
 
-// sign-in anonymously
+// Sign-in anonymously
 signInAnonymously(auth).catch((error) => {
   console.log(error.code);
   console.log(error.message);
+});
+
+// Upgrade current anonymous user to a permanent account
+btnSignUp.addEventListener("click", function () {
+  let email = inputEmail.value;
+  let password = inputPassword.value;
+  let credential = EmailAuthProvider.credential(email, password);
+
+  linkWithCredential(auth.currentUser, credential)
+    .then((usercred) => {
+      console.log(usercred.user.uid);
+    })
+    .catch((error) => {
+      console.log("Error upgrading anonymous account", error);
+    });
 });
