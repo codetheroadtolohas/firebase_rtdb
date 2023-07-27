@@ -14,6 +14,7 @@ import {
   onDisconnect,
   update,
   get,
+  onChildRemoved,
 } from "firebase/database";
 
 // Import auth functionalities
@@ -22,6 +23,7 @@ import {
   signInAnonymously,
   onAuthStateChanged,
   connectAuthEmulator,
+  signInWithEmailAndPassword,
   EmailAuthProvider,
   linkWithCredential,
 } from "firebase/auth";
@@ -41,6 +43,7 @@ const config = {
   appId: "1:242795240849:web:076dd4c6986ceb9dd5ce30",
 };
 
+// App config
 const firebase = initializeApp(config);
 const db = getDatabase();
 const auth = getAuth();
@@ -50,6 +53,7 @@ if (location.hostname === "localhost") {
   connectAuthEmulator(auth, "http://127.0.0.1:9099");
 }
 
+// DOM elements
 const inputEmail = document.querySelector("#email");
 const inputPassword = document.querySelector("#password");
 const btnSignUp = document.querySelector("#sign-up");
@@ -58,89 +62,106 @@ const btnSignOut = document.querySelector("#sign-out");
 const colors = ["grey", "lightblue", "lightgreen", "maroon"];
 const canvas = document.querySelector("canvas");
 const ctx = canvas.getContext("2d");
+const currentlyOnlinePlayers = document.querySelector(
+  "#currently-online-players"
+);
 
+// player state
+const players = {};
+
+// DB refs - current player
 let playerId;
 let playerRef;
-let particles = {};
+let playerConnectionsRef;
 
-// Init game
-function initGame() {
-  let playersRef = ref(db, "players/");
+// DB refs - top level
+const playersRef = ref(db, "players");
+const playersConnectionsRef = ref(db, "playersConnections");
+const playerConnectedRef = ref(db, ".info/connected");
 
-  document.addEventListener("keyup", function (e) {
-    let updates = {};
+function initGame(isAnonymous) {
+  playerConnectionsRef = child(playersConnectionsRef, playerId);
 
-    if (e.key === "ArrowRight") {
-      updates["/" + playerId + "/x"] = particles[playerId].x + 5;
-      get(child(playerRef, "/x")).then((snapshot) => {
-        console.log(snapshot.val());
-      });
-      update(playersRef, updates);
-    }
+  onChildAdded(playersConnectionsRef, (snapshot) => {
+    players[snapshot.key] = {};
+    let row = document.createElement("tr");
+    let onlinePlayer = document.createElement("td");
+
+    onlinePlayer.textContent = snapshot.key;
+    row.appendChild(onlinePlayer);
+    row.setAttribute("data-online-player", snapshot.key);
+    currentlyOnlinePlayers.appendChild(row);
   });
 
-  onValue(playersRef, (snapshot) => {
-    let data = Object.entries(snapshot.val());
-    data.forEach(function (datum) {
-      if (particles[datum[0]]) {
-        particles[datum[0]].x = datum[1].x;
-        particles[datum[0]].y = datum[1].y;
-      } else {
-        delete particles[datum[0]];
+  onValue(playersConnectionsRef, (snapshot) => {
+    let snapshotKeys = Object.keys(snapshot.val());
+    let playerKeys = Object.keys(players);
+
+    console.log(snapshotKeys);
+    console.log(playerKeys);
+
+    playerKeys.forEach(function (playerKey) {
+      if (!snapshotKeys.includes(playerKey)) {
+        let offlinePlayer = document.querySelector(
+          'tr[data-online-player="' + playerKey + '"]'
+        );
+        currentlyOnlinePlayers.removeChild(offlinePlayer);
       }
     });
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    data.forEach(function (datum) {
-      particles[datum[0]].draw(ctx);
-    });
   });
 
-  onChildAdded(playersRef, (snapshot) => {
-    let player = snapshot.val();
-    if (player.id === playerId) {
-      player.color = "black";
+  // onChildRemoved(playersConnectionsRef, (snapshot) => {
+  //   console.log(playerConnectionsRef);
+  //   // let offlinePlayer = document.querySelector(
+  //   //   'tr[data-online-player=" + snapshot.key + "]'
+  //   // );
+  //   // console.log(offlinePlay);
+  //   // let offlinePlayer = document.querySelector(
+  //   //   '`tr[data-online-player="${snapshot.key}"]`'
+  //   // );
+  //   // currentlyOnlinePlayers.removeChild(offlinePlayer);
+  //   // delete players[snapshot.key];
+  // });
+
+  onValue(playerConnectedRef, (snapshot) => {
+    if (snapshot.val() === true) {
+      let con = push(playerConnectionsRef);
+      onDisconnect(con).remove();
+      set(con, true);
     }
-    let particle = new Particle(player.id, player.x, player.y, player.color);
-    particles[player.id] = particle;
-    particle.draw(ctx);
   });
+
+  // onChildAdded();
+  // onValue();
+  // onDisconnect();
 }
 
-// Add current player (anonymous or signed-in) to db
 onAuthStateChanged(auth, (player) => {
-  console.log(auth.currentUser.uid);
-  let currentColor = colors[Math.floor(Math.random() * colors.length + 1)];
+  let isAnonymous = player.isAnonymous;
   playerId = player.uid;
-  playerRef = ref(db, "players/" + playerId);
-  set(playerRef, {
-    id: playerId,
-    color: currentColor,
-    x: Math.floor(Math.random() * 100 + 1),
-    y: Math.floor(Math.random() * 100 + 1),
-  });
+  playerRef = child(playersRef, playerId);
 
-  onDisconnect(playerRef).remove();
+  if (isAnonymous) {
+    console.log("Welcome, guest!");
+    console.log(playerId);
+    set(playerRef, true);
+  } else {
+    console.log("Welcome, " + playerId);
+    get(playerRef).then((snapshot) => {
+      if (snapshot.val() === null) {
+        set(playerRef, true);
+      }
+    });
+  }
 
-  initGame();
+  initGame(isAnonymous);
 });
 
-// Sign-in anonymously
-signInAnonymously(auth).catch((error) => {
-  console.log(error.code);
-  console.log(error.message);
-});
+signInAnonymously(auth);
 
-// Upgrade current anonymous user to a permanent account
-btnSignUp.addEventListener("click", function () {
+btnSignIn.addEventListener("click", function () {
   let email = inputEmail.value;
   let password = inputPassword.value;
-  let credential = EmailAuthProvider.credential(email, password);
 
-  linkWithCredential(auth.currentUser, credential)
-    .then((usercred) => {
-      console.log(usercred.user.uid);
-    })
-    .catch((error) => {
-      console.log("Error upgrading anonymous account", error);
-    });
+  signInWithEmailAndPassword(auth, email, password);
 });
