@@ -73,55 +73,50 @@ const players = {};
 let playerId;
 let playerRef;
 let playerConnectionsRef;
+let playerPositionRef;
 
 // DB refs - top level
 const playersRef = ref(db, "players");
 const playersConnectionsRef = ref(db, "playersConnections");
+const playersPositionRef = ref(db, "playersPositions");
 const playerConnectedRef = ref(db, ".info/connected");
 
 function initGame(isAnonymous) {
+  // Initiate DB ref for current player
   playerConnectionsRef = child(playersConnectionsRef, playerId);
+  playerPositionRef = child(playersPositionRef, playerId);
+
+  // Initiate current player state
+  players[playerId] = {};
 
   onChildAdded(playersConnectionsRef, (snapshot) => {
-    players[snapshot.key] = {};
     let row = document.createElement("tr");
     let onlinePlayer = document.createElement("td");
 
+    players[snapshot.key] = {};
+    row.setAttribute("data-online-player", snapshot.key);
     onlinePlayer.textContent = snapshot.key;
     row.appendChild(onlinePlayer);
-    row.setAttribute("data-online-player", snapshot.key);
     currentlyOnlinePlayers.appendChild(row);
   });
 
   onValue(playersConnectionsRef, (snapshot) => {
-    let snapshotKeys = Object.keys(snapshot.val());
     let playerKeys = Object.keys(players);
+    let snapshotKeys = Object.keys(snapshot.val());
 
-    console.log(snapshotKeys);
-    console.log(playerKeys);
-
-    playerKeys.forEach(function (playerKey) {
-      if (!snapshotKeys.includes(playerKey)) {
-        let offlinePlayer = document.querySelector(
-          'tr[data-online-player="' + playerKey + '"]'
+    playerKeys.forEach(function (playerkey) {
+      if (!snapshotKeys.includes(playerkey)) {
+        let offlinePlayer = currentlyOnlinePlayers.querySelector(
+          'tr[data-online-player="' + playerkey + '"]'
         );
         currentlyOnlinePlayers.removeChild(offlinePlayer);
+        delete players[playerkey];
       }
     });
-  });
 
-  // onChildRemoved(playersConnectionsRef, (snapshot) => {
-  //   console.log(playerConnectionsRef);
-  //   // let offlinePlayer = document.querySelector(
-  //   //   'tr[data-online-player=" + snapshot.key + "]'
-  //   // );
-  //   // console.log(offlinePlay);
-  //   // let offlinePlayer = document.querySelector(
-  //   //   '`tr[data-online-player="${snapshot.key}"]`'
-  //   // );
-  //   // currentlyOnlinePlayers.removeChild(offlinePlayer);
-  //   // delete players[snapshot.key];
-  // });
+    console.log(Object.keys(players));
+    console.log(snapshotKeys);
+  });
 
   onValue(playerConnectedRef, (snapshot) => {
     if (snapshot.val() === true) {
@@ -129,11 +124,21 @@ function initGame(isAnonymous) {
       onDisconnect(con).remove();
       set(con, true);
     }
-  });
 
+    if (isAnonymous) {
+      let playerInitialX = Math.floor(Math.random() * canvas.width + 1);
+      let playerInitialY = Math.floor(Math.random() * canvas.height + 1);
+      set(playerPositionRef, {
+        x: playerInitialX,
+        y: playerInitialY,
+      });
+      onDisconnect(playerPositionRef).remove();
+    }
+  });
   // onChildAdded();
   // onValue();
   // onDisconnect();
+  // onChildRemoved(playersRef);
 }
 
 onAuthStateChanged(auth, (player) => {
