@@ -26,6 +26,7 @@ import {
   signInWithEmailAndPassword,
   EmailAuthProvider,
   linkWithCredential,
+  signOut,
 } from "firebase/auth";
 
 // Import in-house ultility functionalities
@@ -78,45 +79,15 @@ let playerPositionRef;
 // DB refs - top level
 const playersRef = ref(db, "players");
 const playersConnectionsRef = ref(db, "playersConnections");
-const playersPositionRef = ref(db, "playersPositions");
+const playersPositionRef = ref(db, "playersPosition");
 const playerConnectedRef = ref(db, ".info/connected");
 
-function initGame(isAnonymous) {
+function initGame() {
   // Initiate DB ref for current player
   playerConnectionsRef = child(playersConnectionsRef, playerId);
-  playerPositionRef = child(playersPositionRef, playerId);
 
   // Initiate current player state
   players[playerId] = {};
-
-  onChildAdded(playersConnectionsRef, (snapshot) => {
-    let row = document.createElement("tr");
-    let onlinePlayer = document.createElement("td");
-
-    players[snapshot.key] = {};
-    row.setAttribute("data-online-player", snapshot.key);
-    onlinePlayer.textContent = snapshot.key;
-    row.appendChild(onlinePlayer);
-    currentlyOnlinePlayers.appendChild(row);
-  });
-
-  onValue(playersConnectionsRef, (snapshot) => {
-    let playerKeys = Object.keys(players);
-    let snapshotKeys = Object.keys(snapshot.val());
-
-    playerKeys.forEach(function (playerkey) {
-      if (!snapshotKeys.includes(playerkey)) {
-        let offlinePlayer = currentlyOnlinePlayers.querySelector(
-          'tr[data-online-player="' + playerkey + '"]'
-        );
-        currentlyOnlinePlayers.removeChild(offlinePlayer);
-        delete players[playerkey];
-      }
-    });
-
-    console.log(Object.keys(players));
-    console.log(snapshotKeys);
-  });
 
   onValue(playerConnectedRef, (snapshot) => {
     if (snapshot.val() === true) {
@@ -124,17 +95,19 @@ function initGame(isAnonymous) {
       onDisconnect(con).remove();
       set(con, true);
     }
-
-    if (isAnonymous) {
-      let playerInitialX = Math.floor(Math.random() * canvas.width + 1);
-      let playerInitialY = Math.floor(Math.random() * canvas.height + 1);
-      set(playerPositionRef, {
-        x: playerInitialX,
-        y: playerInitialY,
-      });
-      onDisconnect(playerPositionRef).remove();
-    }
   });
+
+  onChildAdded(playersConnectionsRef, (snapshot) => {
+    const row = document.createElement("tr");
+    const onlinePlayerId = document.createElement("td");
+
+    row.setAttribute("data-onlineplayer-id", playerId);
+    onlinePlayerId.textContent = playerId;
+
+    row.appendChild(onlinePlayerId);
+    currentlyOnlinePlayers.appendChild(row);
+  });
+
   // onChildAdded();
   // onValue();
   // onDisconnect();
@@ -143,23 +116,35 @@ function initGame(isAnonymous) {
 
 onAuthStateChanged(auth, (player) => {
   let isAnonymous = player.isAnonymous;
+
   playerId = player.uid;
   playerRef = child(playersRef, playerId);
+  playerPositionRef = child(playersPositionRef, playerId);
 
   if (isAnonymous) {
     console.log("Welcome, guest!");
     console.log(playerId);
-    set(playerRef, true);
+
+    set(playerPositionRef, {
+      x: Math.floor(Math.random() * canvas.width + 1),
+      y: Math.floor(Math.random() * canvas.height + 1),
+    });
   } else {
     console.log("Welcome, " + playerId);
-    get(playerRef).then((snapshot) => {
-      if (snapshot.val() === null) {
-        set(playerRef, true);
+
+    get(playerPositionRef).then((snapshot) => {
+      if (!snapshot.exists()) {
+        set(playerPositionRef, {
+          x: 30,
+          y: 20,
+        });
+      } else {
+        console.log("playerPositionRef Data exists!");
       }
     });
   }
 
-  initGame(isAnonymous);
+  initGame();
 });
 
 signInAnonymously(auth);
@@ -168,5 +153,17 @@ btnSignIn.addEventListener("click", function () {
   let email = inputEmail.value;
   let password = inputPassword.value;
 
+  signOut(auth);
   signInWithEmailAndPassword(auth, email, password);
+});
+
+btnSignUp.addEventListener("click", function () {
+  let email = inputEmail.value;
+  let password = inputPassword.value;
+  let credential = EmailAuthProvider.credential(email, password);
+
+  linkWithCredential(auth.currentUser, credential).then((userCred) => {
+    const user = userCred.user;
+    console.log("Anonymous account successfully upgraded: ", user);
+  });
 });
